@@ -1,0 +1,6 @@
+Q 1 :  20 / 20 passed | score: 32
+Q 2 :  1 / 1 passed | score: 32
+-----------------------------------------
+Your total score of coding section: 64.0
+-----------------------------------------
+Sun Jun 28 10:12:20 PDT 2026
