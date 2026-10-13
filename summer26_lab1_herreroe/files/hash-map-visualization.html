@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Hash Map Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for logs */
+        #log-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #log-container::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+            border-radius: 4px;
+        }
+        #log-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        #log-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        canvas {
+            display: block;
+            width: 100%;
+        }
+        /* UI Lock class */
+        .ui-locked {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex p-4 overflow-hidden">
+
+    <div class="w-full flex flex-row gap-4 items-stretch h-[calc(100vh-2rem)]">
+        
+        <!-- Left Panel: Controls & Logs -->
+        <div class="w-[280px] lg:w-[340px] flex-shrink-0 flex flex-col gap-3 h-full overflow-y-auto pr-1 pb-1">
+            
+            <!-- Header & Stats -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-shrink-0">
+                <h1 class="text-xl font-bold mb-3 text-indigo-600">Hash Map Simulator</h1>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span class="block text-slate-500 font-medium text-xs">Size</span>
+                        <span id="stat-size" class="text-lg font-bold text-slate-800">0</span>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span class="block text-slate-500 font-medium text-xs">Buckets</span>
+                        <span id="stat-buckets" class="text-lg font-bold text-slate-800">4</span>
+                    </div>
+                    <div class="bg-indigo-50 p-2 rounded-lg border border-indigo-100 col-span-2">
+                        <span class="block text-indigo-500 font-medium text-xs">Load Factor (Size/Buckets)</span>
+                        <span id="stat-load" class="text-lg font-bold text-indigo-700">0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pre-created Operations -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-shrink-0" id="controls-panel">
+                <div class="flex justify-between items-center border-b pb-1 mb-2">
+                    <h2 class="text-base font-semibold text-slate-700">Guided Walkthrough</h2>
+                    <button onclick="handleReset()" class="text-[11px] text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-wider font-bold">Restart</button>
+                </div>
+                
+                <!-- Speed Slider -->
+                <div class="mb-3 bg-slate-50 p-2 rounded border border-slate-100">
+                    <div class="flex justify-between items-center mb-1">
+                        <label for="speed-slider" class="text-[11px] font-semibold text-slate-600">Animation Speed</label>
+                        <span id="speed-label" class="text-[10px] text-slate-500 font-mono">1.0x</span>
+                    </div>
+                    <input type="range" id="speed-slider" min="0.2" max="3.0" step="0.1" value="1.0" oninput="document.getElementById('speed-label').innerText = parseFloat(this.value).toFixed(1) + 'x'" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                </div>
+
+                <p class="text-[11px] text-slate-500 mb-2 leading-tight">Click these in order to see how the hash map behaves.</p>
+                <div class="flex flex-col gap-1.5" id="walkthrough-buttons">
+                    <button onclick="handlePut('alpha', 1, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">1. Insert ("alpha", 1)</button>
+                    <button onclick="handlePut('beta', 2, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">2. Insert ("beta", 2)</button>
+                    <button onclick="handlePut('gamma', 3, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">3. Insert ("gamma", 3)</button>
+                    <button onclick="handlePut('delta', 4, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">4. Insert ("delta", 4)</button>
+                    <button onclick="handlePut('epsilon', 5, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">5. Insert ("epsilon", 5) - Collisions!</button>
+                    <button onclick="handlePut('zeta', 6, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">6. Insert ("zeta", 6)</button>
+                    <button onclick="handleGet('beta', this)" class="text-left bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1 rounded text-xs transition-colors border border-emerald-200 font-medium">7. Lookup ("beta")</button>
+                    <button onclick="handlePut('alpha', 99, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">8. Update ("alpha", 99)</button>
+                    <button onclick="handleRehash(8, this)" class="text-left bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-1 rounded text-xs transition-colors border border-amber-200 font-medium">9. Rehash (Grow to 8)</button>
+                    <button onclick="handlePut('eta', 7, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">10. Insert ("eta", 7)</button>
+                    <button onclick="handlePut('theta', 8, this)" class="text-left bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs transition-colors border border-indigo-200 font-medium">11. Insert ("theta", 8)</button>
+                    <button onclick="handleRehash(3, this)" class="text-left bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-1 rounded text-xs transition-colors border border-amber-200 font-medium">12. Rehash (Shrink to 3) - Max Collisions</button>
+                    <button onclick="handleGet('gamma', this)" class="text-left bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1 rounded text-xs transition-colors border border-emerald-200 font-medium">13. Lookup ("gamma")</button>
+                    <button onclick="handleDelete('beta', this)" class="text-left bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1 rounded text-xs transition-colors border border-red-200 font-medium">14. Delete ("beta")</button>
+                    <button onclick="handleDelete('epsilon', this)" class="text-left bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1 rounded text-xs transition-colors border border-red-200 font-medium">15. Delete ("epsilon")</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Panel: Canvas & Log -->
+        <div class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-w-0 h-full">
+            <div class="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0">
+                <h2 class="text-base font-semibold text-slate-700">Memory Visualization (Separate Chaining via Vectors)</h2>
+                <span id="animating-badge" class="hidden bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider animate-pulse">Animation in progress...</span>
+            </div>
+            
+            <!-- Execution Log moved here, directly above canvas -->
+            <div class="bg-slate-900 border-b border-slate-800 flex flex-col flex-shrink-0 h-28">
+                <div class="px-5 py-1.5 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
+                    <h3 class="text-xs font-semibold text-slate-200">Hash Computations & Operations Log</h3>
+                    <button onclick="clearLog()" class="text-[10px] text-slate-400 hover:text-white transition-colors uppercase tracking-wider">Clear</button>
+                </div>
+                <div id="log-container" class="p-3 px-5 flex-1 overflow-y-auto text-xs font-mono text-green-400 space-y-1.5 leading-relaxed">
+                    <!-- Logs go here -->
+                    <div>Waiting for keys...</div>
+                </div>
+            </div>
+
+            <!-- Canvas container needs scrolling in case buckets get huge -->
+            <div class="flex-1 overflow-auto p-5 bg-slate-50 relative" id="canvas-container">
+                <canvas id="mapCanvas"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Hash Map State & Logic ---
+        let numBuckets = 4;
+        let size = 0;
+        let buckets = Array.from({ length: numBuckets }, () => []);
+        
+        // Highlights for animation/visualization
+        let highlightedBucket = -1;
+        let highlightedEntry = null;
+        let deletingEntry = null; 
+        let scanningEntry = null; // Highlight for the O(K) scan process
+        let movingEntry = null;   // Highlight for rehashing
+        let isAnimating = false;
+
+        // Simple string hashing function (DJB2 variant)
+        function hashString(str) {
+            let hash = 5381;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) + hash) + str.charCodeAt(i); 
+            }
+            return Math.abs(hash);
+        }
+
+        const sleep = ms => {
+            const speed = parseFloat(document.getElementById('speed-slider').value);
+            return new Promise(r => setTimeout(r, ms / speed));
+        };
+
+        // --- UI & Rendering Logic ---
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        const logContainer = document.getElementById('log-container');
+        const controlsPanel = document.getElementById('controls-panel');
+        const badge = document.getElementById('animating-badge');
+
+        function lockUI() {
+            isAnimating = true;
+            controlsPanel.classList.add('ui-locked');
+            badge.classList.remove('hidden');
+        }
+
+        function unlockUI() {
+            isAnimating = false;
+            controlsPanel.classList.remove('ui-locked');
+            badge.classList.add('hidden');
+        }
+
+        function markButtonDone(btn) {
+            if (!btn) return;
+            if (!btn.innerHTML.startsWith('✓')) {
+                btn.innerHTML = '✓ ' + btn.innerHTML;
+                btn.classList.add('opacity-60', 'bg-slate-100');
+                btn.classList.remove('font-medium', 'bg-indigo-50', 'bg-emerald-50', 'bg-amber-50', 'bg-red-50');
+            }
+        }
+
+        function addLog(message, isHighlight = false, isError = false) {
+            const div = document.createElement('div');
+            if (isError) {
+                div.className = 'text-red-400';
+            } else {
+                div.className = isHighlight ? 'text-yellow-300' : 'text-green-400';
+            }
+            div.innerText = `> ${message}`;
+            logContainer.appendChild(div);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLog() {
+            logContainer.innerHTML = '<div>> Waiting for keys...</div>';
+        }
+
+        function updateStats() {
+            document.getElementById('stat-size').innerText = size;
+            document.getElementById('stat-buckets').innerText = numBuckets;
+            const loadFactor = size / numBuckets;
+            document.getElementById('stat-load').innerText = loadFactor.toFixed(2);
+            
+            const loadEl = document.getElementById('stat-load');
+            if (loadFactor > 2.0) {
+                loadEl.className = "text-xl font-bold text-red-600";
+            } else if (loadFactor > 1.0) {
+                loadEl.className = "text-xl font-bold text-amber-500";
+            } else {
+                loadEl.className = "text-xl font-bold text-indigo-700";
+            }
+        }
+
+        // --- Canvas Drawing ---
+        function drawCanvas() {
+            const bucketHeight = 60;
+            const padding = 40;
+            const requiredHeight = (numBuckets * bucketHeight) + (padding * 2);
+            
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            
+            canvas.width = rect.width * dpr;
+            canvas.height = Math.max(rect.height, requiredHeight) * dpr;
+            
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${Math.max(rect.height, requiredHeight)}px`;
+            
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const startX = 100;
+            const startY = padding;
+
+            ctx.font = "14px monospace";
+            ctx.textBaseline = "middle";
+
+            for (let i = 0; i < numBuckets; i++) {
+                const y = startY + (i * bucketHeight);
+                
+                ctx.fillStyle = (i === highlightedBucket) ? "#4f46e5" : "#64748b";
+                ctx.fillText(`Bucket ${i}`, 10, y + 25);
+
+                ctx.strokeStyle = (i === highlightedBucket) ? "#4f46e5" : "#cbd5e1";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(startX, y + 10);
+                ctx.lineTo(startX - 10, y + 10);
+                ctx.lineTo(startX - 10, y + 40);
+                ctx.lineTo(startX, y + 40);
+                ctx.stroke();
+
+                const vector = buckets[i];
+                let currentX = startX + 10;
+
+                if (vector.length === 0) {
+                    ctx.fillStyle = "#94a3b8";
+                    ctx.font = "italic 12px sans-serif";
+                    ctx.fillText("empty vector", currentX, y + 25);
+                    ctx.font = "14px monospace";
+                }
+
+                for (let j = 0; j < vector.length; j++) {
+                    const entry = vector[j];
+                    const entryStr = `("${entry.key}", ${entry.val})`;
+                    
+                    const textWidth = ctx.measureText(entryStr).width;
+                    const boxWidth = textWidth + 20;
+
+                    const isTargetEntry = highlightedEntry && highlightedEntry.key === entry.key && i === highlightedBucket;
+                    const isDeletingEntry = deletingEntry && deletingEntry.key === entry.key && i === highlightedBucket;
+                    const isScanningEntry = scanningEntry && scanningEntry.key === entry.key && i === highlightedBucket;
+                    const isMovingEntry = movingEntry && movingEntry.key === entry.key; // Rehash animation
+
+                    if (isDeletingEntry) {
+                        ctx.fillStyle = "#fef2f2"; 
+                        ctx.strokeStyle = "#ef4444"; 
+                    } else if (isScanningEntry) {
+                        ctx.fillStyle = "#ffedd5"; // orange for scanning
+                        ctx.strokeStyle = "#f97316"; 
+                    } else if (isMovingEntry) {
+                        ctx.fillStyle = "#f3e8ff"; // purple for moving
+                        ctx.strokeStyle = "#a855f7";
+                    } else {
+                        ctx.fillStyle = isTargetEntry ? "#fef08a" : (i === highlightedBucket ? "#e0e7ff" : "#ffffff");
+                        ctx.strokeStyle = isTargetEntry ? "#ca8a04" : (i === highlightedBucket ? "#818cf8" : "#94a3b8");
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.roundRect(currentX, y + 5, boxWidth, 40, 6);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    if (isDeletingEntry) {
+                        ctx.fillStyle = "#991b1b"; 
+                    } else if (isScanningEntry) {
+                        ctx.fillStyle = "#c2410c"; 
+                    } else if (isMovingEntry) {
+                        ctx.fillStyle = "#7e22ce";
+                    } else {
+                        ctx.fillStyle = isTargetEntry ? "#854d0e" : (i === highlightedBucket ? "#3730a3" : "#334155");
+                    }
+                    ctx.fillText(entryStr, currentX + 10, y + 25);
+
+                    if (j < vector.length - 1) {
+                        ctx.fillStyle = "#94a3b8";
+                        ctx.fillText(",", currentX + boxWidth + 2, y + 25);
+                    }
+
+                    currentX += boxWidth + 15;
+                }
+
+                ctx.strokeStyle = (i === highlightedBucket) ? "#4f46e5" : "#cbd5e1";
+                ctx.beginPath();
+                ctx.moveTo(currentX + 5, y + 10);
+                ctx.lineTo(currentX + 15, y + 10);
+                ctx.lineTo(currentX + 15, y + 40);
+                ctx.lineTo(currentX + 5, y + 40);
+                ctx.stroke();
+
+                if (vector.length > 1) {
+                    ctx.fillStyle = "#ef4444";
+                    ctx.font = "bold 12px sans-serif";
+                    ctx.fillText("← Collision", currentX + 25, y + 25);
+                    ctx.font = "14px monospace"; 
+                }
+            }
+        }
+
+        // --- Interaction Handlers (Now Async for Animations) ---
+
+        function handleReset() {
+            if(isAnimating) return;
+            numBuckets = 4;
+            size = 0;
+            buckets = Array.from({ length: numBuckets }, () => []);
+            highlightedBucket = -1;
+            highlightedEntry = null;
+            deletingEntry = null;
+            scanningEntry = null;
+            movingEntry = null;
+            clearLog();
+            updateStats();
+            drawCanvas();
+            
+            // Reset buttons
+            const btns = document.getElementById('walkthrough-buttons').children;
+            for(let b of btns) {
+                b.innerHTML = b.innerHTML.replace('✓ ', '');
+                b.className = b.className.replace('opacity-60 bg-slate-100 font-normal', 'font-medium');
+                if(b.innerText.includes('Insert') || b.innerText.includes('Update')) b.classList.add('bg-indigo-50');
+                if(b.innerText.includes('Lookup')) b.classList.add('bg-emerald-50');
+                if(b.innerText.includes('Rehash')) b.classList.add('bg-amber-50');
+                if(b.innerText.includes('Delete')) b.classList.add('bg-red-50');
+            }
+        }
+
+        async function handlePut(keyInput, valInput, btn) {
+            if (isAnimating) return;
+            lockUI();
+
+            const hashValue = hashString(keyInput);
+            const bucketIndex = hashValue % numBuckets;
+            addLog(`Put: hash("${keyInput}") % ${numBuckets} = ${bucketIndex}`, true);
+            
+            highlightedBucket = bucketIndex;
+            drawCanvas();
+            await sleep(500); // Pause to show which bucket we selected
+
+            const vector = buckets[bucketIndex];
+            let found = false;
+
+            // Animate the scan
+            for (let i = 0; i < vector.length; i++) {
+                scanningEntry = vector[i];
+                drawCanvas();
+                await sleep(400); // Visual delay for each element scanned
+                
+                if (vector[i].key === keyInput) {
+                    vector[i].val = valInput;
+                    found = true;
+                    highlightedEntry = { key: keyInput };
+                    scanningEntry = null;
+                    addLog(`Update: Found "${keyInput}", updated value to ${valInput}`);
+                    drawCanvas();
+                    await sleep(600);
+                    break;
+                }
+            }
+
+            scanningEntry = null;
+
+            if (!found) {
+                vector.push({ key: keyInput, val: valInput });
+                size++;
+                highlightedEntry = { key: keyInput };
+                addLog(`Insert: Appended ("${keyInput}", ${valInput}) to Bucket ${bucketIndex}`);
+                updateStats();
+                drawCanvas();
+                await sleep(600);
+            }
+
+            highlightedBucket = -1;
+            highlightedEntry = null;
+            drawCanvas();
+            markButtonDone(btn);
+            unlockUI();
+        }
+
+        async function handleGet(keyInput, btn) {
+            if (isAnimating) return;
+            lockUI();
+
+            const hashValue = hashString(keyInput);
+            const bucketIndex = hashValue % numBuckets;
+            addLog(`Get: hash("${keyInput}") % ${numBuckets} = ${bucketIndex}`, true);
+            
+            highlightedBucket = bucketIndex;
+            drawCanvas();
+            await sleep(500);
+
+            const vector = buckets[bucketIndex];
+            let found = false;
+            
+            // Animate the scan
+            for (let i = 0; i < vector.length; i++) {
+                scanningEntry = vector[i];
+                drawCanvas();
+                await sleep(400); // Visual delay for scan
+
+                if (vector[i].key === keyInput) {
+                    found = true;
+                    highlightedEntry = { key: keyInput };
+                    scanningEntry = null;
+                    addLog(`Found: "${keyInput}" maps to ${vector[i].val}`);
+                    drawCanvas();
+                    await sleep(800);
+                    break;
+                }
+            }
+
+            if (!found) {
+                addLog(`Not Found: "${keyInput}" does not exist in Bucket ${bucketIndex}`, false, true);
+            }
+
+            scanningEntry = null;
+            highlightedBucket = -1;
+            highlightedEntry = null;
+            drawCanvas();
+            markButtonDone(btn);
+            unlockUI();
+        }
+
+        async function handleDelete(keyInput, btn) {
+            if (isAnimating) return;
+            lockUI();
+
+            const hashValue = hashString(keyInput);
+            const bucketIndex = hashValue % numBuckets;
+            addLog(`Delete: hash("${keyInput}") % ${numBuckets} = ${bucketIndex}`, false, true);
+            
+            highlightedBucket = bucketIndex;
+            drawCanvas();
+            await sleep(500);
+
+            const vector = buckets[bucketIndex];
+            let indexToRemove = -1;
+            
+            // Animate the scan
+            for (let i = 0; i < vector.length; i++) {
+                scanningEntry = vector[i];
+                drawCanvas();
+                await sleep(400);
+
+                if (vector[i].key === keyInput) {
+                    indexToRemove = i;
+                    deletingEntry = { key: keyInput };
+                    scanningEntry = null;
+                    break;
+                }
+            }
+
+            if (indexToRemove !== -1) {
+                drawCanvas();
+                addLog(`Delete: Removing ("${keyInput}") from Bucket ${bucketIndex}`);
+                await sleep(600); // Show red deletion highlight
+                
+                vector.splice(indexToRemove, 1);
+                size--;
+                updateStats();
+            } else {
+                addLog(`Delete Failed: "${keyInput}" not found.`, false, true);
+            }
+
+            deletingEntry = null;
+            scanningEntry = null;
+            highlightedBucket = -1;
+            drawCanvas();
+            markButtonDone(btn);
+            unlockUI();
+        }
+
+        async function handleRehash(newCountInput, btn) {
+            if (isAnimating || newCountInput === numBuckets) return;
+            lockUI();
+            
+            addLog(`Rehash: Starting redistribution (${numBuckets} -> ${newCountInput} buckets)`, true);
+            
+            // Store old buckets for iteration, replace main array with new sizes immediately
+            // so we can visualize items moving into the new space.
+            const oldBuckets = buckets;
+            buckets = Array.from({ length: newCountInput }, () => []);
+            const oldNumBuckets = numBuckets;
+            numBuckets = newCountInput;
+            
+            updateStats();
+            drawCanvas();
+            await sleep(500);
+
+            // Animate pulling items from old array into new
+            for (let i = 0; i < oldNumBuckets; i++) {
+                for (let j = 0; j < oldBuckets[i].length; j++) {
+                    const entry = oldBuckets[i][j];
+                    movingEntry = entry;
+                    
+                    const hashValue = hashString(entry.key);
+                    const newIndex = hashValue % newCountInput;
+                    
+                    addLog(`Rehash Move: hash("${entry.key}") % ${newCountInput} = ${newIndex}`);
+                    
+                    // Highlight the target bucket briefly
+                    highlightedBucket = newIndex;
+                    drawCanvas();
+                    await sleep(300);
+                    
+                    // Plop it in
+                    buckets[newIndex].push(entry);
+                    highlightedEntry = entry;
+                    drawCanvas();
+                    await sleep(400);
+                }
+            }
+            
+            movingEntry = null;
+            highlightedBucket = -1;
+            highlightedEntry = null;
+            addLog(`Rehash complete.`);
+            drawCanvas();
+            markButtonDone(btn);
+            unlockUI();
+        }
+
+        window.addEventListener('resize', drawCanvas);
+
+        // Initial setup
+        updateStats();
+        setTimeout(drawCanvas, 100);
+
+    </script>
+</body>
+</html>
